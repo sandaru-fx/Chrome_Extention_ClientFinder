@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "Client Finder",
+  "description": "Filter Google Maps results to show businesses without websites.",
+  "version": "0.1.0",
+  "action": {
+    "default_popup": "index.html",
+    "default_title": "Client Finder"
+  },
+  "permissions": ["storage", "tabs"],
+  "host_permissions": ["https://www.google.com/maps/*"],
+  "content_scripts": [
+    {
+      "matches": ["https://www.google.com/maps/*"],
+      "js": ["assets/content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
