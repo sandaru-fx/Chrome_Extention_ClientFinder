@@ -14,6 +14,7 @@ const MESSAGE_TYPES = {
 
 const HIDDEN_ATTRIBUTE = "data-client-finder-hidden";
 const SCANNED_ATTRIBUTE = "data-client-finder-scanned";
+const SCRIPT_READY_ATTRIBUTE = "data-client-finder-ready";
 
 let observer: MutationObserver | null = null;
 let filterEnabled = false;
@@ -75,7 +76,10 @@ function hasWebsiteLabel(element: Element): boolean {
     .join(" ")
     .toLowerCase();
 
-  return /\bwebsite\b|\bweb site\b/.test(textSignals);
+  return (
+    /\bwebsite\b|\bweb site\b/.test(textSignals) ||
+    /visit .* website/.test(textSignals)
+  );
 }
 
 function cardHasWebsite(card: HTMLElement): boolean {
@@ -110,24 +114,63 @@ function looksLikeResultCard(element: Element): element is HTMLElement {
   return hasPlaceLink && buttons.length > 0;
 }
 
-function getCandidateCards(): HTMLElement[] {
-  const root = findResultsRoot();
-  const feedItems = Array.from(
-    root.querySelectorAll<HTMLElement>('[role="article"], [role="listitem"]')
-  ).filter(looksLikeResultCard);
+function getElementArea(element: HTMLElement): number {
+  const rect = element.getBoundingClientRect();
+  return Math.round(rect.width * rect.height);
+}
 
-  if (feedItems.length > 0) {
-    return feedItems;
+function isReasonableCardSize(element: HTMLElement): boolean {
+  const rect = element.getBoundingClientRect();
+  return rect.width >= 240 && rect.height >= 70;
+}
+
+function findResultCardFromPlaceLink(
+  link: HTMLAnchorElement,
+  root: HTMLElement
+): HTMLElement | null {
+  const semanticCard = link.closest<HTMLElement>(
+    '[role="article"], [role="listitem"]'
+  );
+
+  if (semanticCard && root.contains(semanticCard)) {
+    return semanticCard;
   }
 
+  const candidates: HTMLElement[] = [];
+  let current: HTMLElement | null = link.parentElement;
+
+  while (current && current !== root && current !== document.body) {
+    if (looksLikeResultCard(current) && isReasonableCardSize(current)) {
+      candidates.push(current);
+    }
+
+    current = current.parentElement;
+  }
+
+  if (candidates.length === 0) {
+    return null;
+  }
+
+  const websiteCandidate = candidates.find(cardHasWebsite);
+
+  if (websiteCandidate) {
+    return websiteCandidate;
+  }
+
+  return candidates.reduce((best, candidate) =>
+    getElementArea(candidate) > getElementArea(best) ? candidate : best
+  );
+}
+
+function getCandidateCards(): HTMLElement[] {
+  const root = findResultsRoot();
   const placeLinks = Array.from(
     root.querySelectorAll<HTMLAnchorElement>('a[href*="/maps/place/"]')
   );
 
   const candidates = placeLinks
-    .map((link) => link.closest<HTMLElement>("[data-result-index], div"))
-    .filter((card): card is HTMLElement => Boolean(card))
-    .filter(looksLikeResultCard);
+    .map((link) => findResultCardFromPlaceLink(link, root))
+    .filter((card): card is HTMLElement => Boolean(card));
 
   return Array.from(new Set(candidates));
 }
@@ -228,3 +271,5 @@ chrome.runtime.onMessage.addListener(
 chrome.storage.sync
   .get(STORAGE_KEYS.filterEnabled)
   .then((result) => setFilterEnabled(Boolean(result[STORAGE_KEYS.filterEnabled])));
+
+document.documentElement.setAttribute(SCRIPT_READY_ATTRIBUTE, "true");

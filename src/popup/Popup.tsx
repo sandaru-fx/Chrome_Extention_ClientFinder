@@ -9,9 +9,7 @@ async function getStoredFilterState(): Promise<boolean> {
 }
 
 async function notifyMapsTabs(enabled: boolean): Promise<void> {
-  const tabs = await chrome.tabs.query({
-    url: "https://www.google.com/maps/*"
-  });
+  const tabs = await chrome.tabs.query({});
 
   const message: ClientFinderMessage = {
     type: MESSAGE_TYPES.setFilterEnabled,
@@ -20,9 +18,38 @@ async function notifyMapsTabs(enabled: boolean): Promise<void> {
 
   await Promise.allSettled(
     tabs
-      .filter((tab) => typeof tab.id === "number")
-      .map((tab) => chrome.tabs.sendMessage(tab.id as number, message))
+      .filter((tab) => typeof tab.id === "number" && isGoogleMapsUrl(tab.url))
+      .map(async (tab) => {
+        const tabId = tab.id as number;
+
+        try {
+          await chrome.tabs.sendMessage(tabId, message);
+        } catch {
+          await chrome.scripting.executeScript({
+            target: { tabId },
+            files: ["assets/content.js"]
+          });
+          await chrome.tabs.sendMessage(tabId, message);
+        }
+      })
   );
+}
+
+function isGoogleMapsUrl(url?: string): boolean {
+  if (!url) {
+    return false;
+  }
+
+  try {
+    const parsedUrl = new URL(url);
+    return (
+      (parsedUrl.hostname === "www.google.com" ||
+        parsedUrl.hostname === "maps.google.com") &&
+      parsedUrl.pathname.startsWith("/maps")
+    );
+  } catch {
+    return false;
+  }
 }
 
 export default function Popup() {

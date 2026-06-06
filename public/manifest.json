@@ -7,11 +7,17 @@
     "default_popup": "index.html",
     "default_title": "Client Finder"
   },
-  "permissions": ["storage", "tabs"],
-  "host_permissions": ["https://www.google.com/maps/*"],
+  "permissions": ["storage", "tabs", "scripting"],
+  "host_permissions": [
+    "https://www.google.com/maps/*",
+    "https://maps.google.com/*"
+  ],
   "content_scripts": [
     {
-      "matches": ["https://www.google.com/maps/*"],
+      "matches": [
+        "https://www.google.com/maps/*",
+        "https://maps.google.com/*"
+      ],
       "js": ["assets/content.js"],
       "run_at": "document_idle"
     }
